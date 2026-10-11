@@ -53,6 +53,7 @@ export function SessionBranchSummary({
 	pullRequests,
 	session,
 	title,
+	hasSettledPR,
 }: {
 	hostId?: string;
 	onOpenFiles: () => void;
@@ -61,6 +62,8 @@ export function SessionBranchSummary({
 	pullRequests: ReactNode;
 	session: WorkspaceSession;
 	title: string;
+	/** A merged or closed PR should not suggest creating a duplicate PR. */
+	hasSettledPR: boolean;
 }) {
 	const { t } = useTranslation();
 	const key = sessionUiKey(session.id, hostId);
@@ -82,7 +85,7 @@ export function SessionBranchSummary({
 		// head_fallback compares against HEAD because the base is unknown.
 		base: manifest.data?.compareMode === "head_fallback" ? undefined : displayBaseRef(manifest.data?.compareBaseRef),
 	};
-	const plan = gitActionPlan(facts, openPRNumber);
+	const plan = gitActionPlan(facts, openPRNumber, hasSettledPR);
 
 	const send = useMutation({
 		mutationFn: async (kind: SessionGitActionKind) => {
@@ -307,20 +310,27 @@ function commitsRowView(facts: GitFacts, t: TFunction): { label: string; note?: 
 	}
 	if (branch.commits === 0) return null;
 	const label = t("inspector.git.commits", { count: branch.commits });
+	if (isContentAtBase(facts)) return { label };
 	if (!branch.remoteBranch) return { label, note: t("inspector.git.notPushed"), noteTone: "warn" };
 	if (branch.unpushed > 0) return { label, note: t("inspector.git.someNotPushed", { count: branch.unpushed }), noteTone: "warn" };
 	return { label, note: t("inspector.git.pushed"), noteTone: "muted" };
 }
 
-export function gitActionPlan(facts: GitFacts, openPRNumber: number | undefined): GitActionPlan | null {
+export function gitActionPlan(
+	facts: GitFacts,
+	openPRNumber: number | undefined,
+	hasSettledPR: boolean,
+): GitActionPlan | null {
 	if (!facts.loaded) return null;
 	const dirty = facts.uncommitted.length > 0;
 	const unpushed = facts.branch?.unpushed ?? 0;
+	if (isContentAtBase(facts)) return null;
 	if (openPRNumber !== undefined) {
 		if (dirty) return { primary: "commitPush", menu: ["commit"] };
 		if (unpushed > 0) return { primary: "push", menu: [] };
 		return null;
 	}
+	if (hasSettledPR && !dirty) return null;
 	if (dirty) return { primary: "createPR", menu: ["commit", "commitPush", "createDraftPR"] };
 	if (unpushed > 0) return { primary: "createPR", menu: ["push", "createDraftPR"] };
 	if (facts.branch && facts.branch.commits > 0) return { primary: "createPR", menu: ["createDraftPR"] };
@@ -364,6 +374,16 @@ function primaryLabel(kind: SessionGitActionKind, facts: GitFacts, openPRNumber:
 	if (facts.uncommitted.length > 0) return t("inspector.git.commitAndCreatePR");
 	if (!isPushed(facts.branch)) return t("inspector.git.pushAndCreatePR");
 	return t("inspector.git.createPR");
+}
+
+function isContentAtBase(facts: GitFacts): boolean {
+	return (
+		facts.loaded &&
+		facts.base !== undefined &&
+		facts.uncommitted.length === 0 &&
+		facts.committed.length === 0 &&
+		(facts.branch?.commits ?? 0) > 0
+	);
 }
 
 function isPushed(branch: SessionBranchState | undefined): boolean {

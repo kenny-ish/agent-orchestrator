@@ -422,6 +422,7 @@ const SummaryView = memo(function SummaryView({
 		? t("inspector.artifacts", { count: artifacts.length })
 		: t("inspector.artifact");
 	const openPRNumber = prSummaries.find((pr) => pr.state === "open" || pr.state === "draft")?.number;
+	const hasSettledPR = prSummaries.some((pr) => pr.state === "merged" || pr.state === "closed");
 	// CI, review, and merge policies act on a PR. Standalone sessions keep the row for Archive.
 	const showSessionControls = hasPRs || session.workspaceId === STANDALONE_WORKSPACE_ID;
 	// Cloud orchestrators list the workers they spawned; local orchestrators
@@ -460,6 +461,7 @@ const SummaryView = memo(function SummaryView({
 					hostId={hostId}
 					onOpenFiles={onOpenFiles}
 					openPRNumber={openPRNumber}
+					hasSettledPR={hasSettledPR}
 					pullRequests={hasPRs ? (
 						<>
 							{prSummaries.map((pr) => (

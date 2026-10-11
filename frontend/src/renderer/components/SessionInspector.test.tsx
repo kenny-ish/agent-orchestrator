@@ -4989,6 +4989,27 @@ describe("SessionInspector branch summary", () => {
     expect(await screen.findByRole("button", { name: "Create PR" })).toBeInTheDocument();
   });
 
+  it("does not offer another PR after the session PR is merged", async () => {
+    mockGitState({ committed: [changedFile("src/a.ts", 5, 0)] });
+    renderWithQuery(<SessionInspector session={session([pr(7, "merged")], { branchState: pushed(1) })} />);
+
+    expect(await screen.findByText("pushed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More git actions" })).not.toBeInTheDocument();
+  });
+
+  it("does not warn or offer to push when the branch content is already in the base", async () => {
+    mockGitState({});
+    renderWithQuery(
+      <SessionInspector session={session([pr(7, "merged")], { branchState: { commits: 3, unpushed: 3 } })} />,
+    );
+
+    expect(await screen.findByText("3 commits")).toBeInTheDocument();
+    expect(screen.queryByText("not pushed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Push & create PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More git actions" })).not.toBeInTheDocument();
+  });
+
   it("commits without pushing from the menu", async () => {
     mockGitState({ uncommitted: [changedFile("src/a.ts", 1, 0)] });
     renderWithQuery(<SessionInspector session={session([])} />);
